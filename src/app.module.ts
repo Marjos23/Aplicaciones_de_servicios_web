@@ -1,21 +1,21 @@
-import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common'; // 1
 import { createObserveModule } from '@nestjs/observe';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
+import { AppController } from './app.controller.js'; // 2
+import { AppService } from './app.service.js'; // 3
+import { WelcomeController } from './welcome.controller.js'; // 4
+import { WelcomeService } from './welcome.service.js'; // 5
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
-@Module({
+@Module({ // 6
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
     ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'project-name',
+      appKey: process.env.OBSERVE_APP_KEY ?? '',
+      appSecret: process.env.OBSERVE_APP_SECRET ?? '',
+      serviceId: process.env.OBSERVE_SERVICE_ID ?? 'project-name',
     }),
-  ],
-  controllers: [AppController],
-  providers: [AppService],
+  ], // 7
+  controllers: [AppController, WelcomeController], // 8
+  providers: [AppService, WelcomeService], // 9
 })
-export class AppModule {}
+export class AppModule {} // 10
