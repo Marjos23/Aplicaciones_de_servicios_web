@@ -1,0 +1,338 @@
+CourseHub API · demostración de la semana 5
+Persistencia con TypeORM sobre PostgreSQL
+Base: coursehub-api en localhost:5434 · API en http://localhost:3000
+Fecha: 2026-10-05 15:58:55
+
+Cómo leer este archivo: cada bloque corresponde a uno de los siete casos
+del enunciado. Se muestra la petición tal como se envía y la respuesta
+tal como vuelve, seguida de la comprobación en la base de datos.
+
+Las consultas marcadas con «En DBeaver» se pueden copiar y pegar tal cual
+en el editor SQL de DBeaver, sobre la conexión coursehub-api del puerto
+5434. Ahí se ve que los datos no viven en la memoria del proceso.
+
+════════════════════════════════════════════════════════
+PASO 0 · Estado inicial: las tres tablas existen y están vacías
+════════════════════════════════════════════════════════
+En DBeaver:
+ cursos 
+--------
+      0
+(1 row)
+
+
+En DBeaver:
+ estudiantes 
+-------------
+           0
+(1 row)
+
+
+En DBeaver:
+ matrículas 
+------------
+          0
+(1 row)
+
+
+Las tablas no estaban en memoria: viven en PostgreSQL desde el arranque.
+
+════════════════════════════════════════════════════════
+PASO 1 · Crear un curso y un estudiante activo
+════════════════════════════════════════════════════════
+--- curso ---
+$ POST /courses
+{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}
+  CID = 1
+
+--- un segundo curso, para probar el filtro por curso ---
+{"id":2,"title":"Curso de apoyo","level":"beginner"}
+  CID2 = 2
+
+--- estudiante activo ---
+$ POST /students
+{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":true}
+  SID = 1
+
+--- segundo estudiante, para probar el filtro por estudiante ---
+{"id":2,"name":"Luis Paz","email":"luis.paz@example.com","age":22,"career":"Mathematics","semester":3,"isActive":true}
+  SID2 = 2
+
+isActive no se envió en el cuerpo: la columna lo define como true por defecto.
+Ana queda activa y es quien matrícularemos. Luis queda activo también.
+En DBeaver:
+ id |   name   | isActive 
+----+----------+----------
+  1 | Ana Ruiz | t
+  2 | Luis Paz | t
+(2 rows)
+
+
+
+════════════════════════════════════════════════════════
+PASO 2 · Crear una matrícula válida
+════════════════════════════════════════════════════════
+$ POST /enrollments   {"studentId":1,"courseId":1}
+{"id":1,"student":{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":true},"course":{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}}
+
+HTTP 201
+
+  EID = 1
+
+La respuesta trae el estudiante y el curso relacionados, no solo los ids.
+Guardamos esa matrícula para los pasos siguientes.
+En DBeaver:
+ id | student_id | course_id 
+----+------------+-----------
+  1 |          1 |         1
+(1 row)
+
+
+Las columnas student_id y course_id son claves foráneas generadas por TypeORM,
+no números guardados sueltos.
+
+════════════════════════════════════════════════════════
+PASO 3 · Reiniciar la API y consultar la misma matrícula
+════════════════════════════════════════════════════════
+Deteniendo la API (pid 389646)...
+Arrancando de nuevo...
+API reiniciada, con el mismo proceso y sin tocar la base de datos.
+
+--- ahora consultamos la matrícula creada ANTES del reinicio ---
+$ GET /enrollments?studentId=1
+[{"id":1,"student":{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":true},"course":{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}}]
+HTTP 200
+Si los datos estuvieran en memoria, esta lista vendría vacía.
+En DBeaver:
+ id | student_id | course_id 
+----+------------+-----------
+  1 |          1 |         1
+(1 row)
+
+
+
+════════════════════════════════════════════════════════
+PASO 4 · Intentar una matrícula duplicada (se espera 409)
+════════════════════════════════════════════════════════
+$ POST /enrollments   {"studentId":1,"courseId":1}   (la misma pareja)
+{"message":"Student is already enrolled in this course","error":"Conflict","statusCode":409}
+HTTP 409
+El servicio comprueba primero y responde 409 con un mensaje comprensible.
+
+Y si el servicio no lo comprobara, la base lo impediría igualmente.
+Esta es la restricción única compuesta sobre (student_id, course_id):
+En DBeaver:
+            conname             |           definicion           
+--------------------------------+--------------------------------
+ UQ_850389020f5faddd405e2792634 | UNIQUE (student_id, course_id)
+(1 row)
+
+
+Y sigue habiendo una sola fila para esa pareja, no dos:
+En DBeaver:
+ filas_para_la_pareja 
+----------------------
+                    1
+(1 row)
+
+
+
+════════════════════════════════════════════════════════
+PASO 5 · Intentar matrícular un estudiante inactivo (se espera 400)
+════════════════════════════════════════════════════════
+--- desactivamos a Ana ---
+$ PATCH /students/1/status   {"isActive":false}
+{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":false}
+HTTP 200
+En DBeaver:
+ id |   name   | isActive 
+----+----------+----------
+  1 | Ana Ruiz | f
+(1 row)
+
+
+Ana ya está en el mismo curso que antes, así que para que el 400 sea por
+inactividad y no por duplicado, la probamos contra el otro curso (2):
+
+$ POST /enrollments   {"studentId":1,"courseId":2}
+{"message":"Inactive students cannot enroll","error":"Bad Request","statusCode":400}
+HTTP 400
+El orden de las comprobaciones permite explicar el motivo exacto del fallo:
+  estudiante inexistente -> 404        curso inexistente -> 404
+  estudiante inactivo    -> 400        pareja repetida    -> 409
+
+No se creó ninguna fila nueva:
+En DBeaver:
+ matrículas_de_ana 
+-------------------
+                 1
+(1 row)
+
+
+--- reactivamos a Ana ---
+En DBeaver:
+ id |   name   | isActive 
+----+----------+----------
+  1 | Ana Ruiz | t
+(1 row)
+
+
+
+════════════════════════════════════════════════════════
+PASO 6 · Filtrar las matrículas por estudiante o por curso
+════════════════════════════════════════════════════════
+--- filtrar por estudiante (Ana) ---
+$ GET /enrollments?studentId=1
+[{"id":1,"student":{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":true},"course":{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}}]
+
+--- filtrar por curso (Semana 5) ---
+$ GET /enrollments?courseId=1
+[{"id":1,"student":{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":true},"course":{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}}]
+
+--- los dos filtros a la vez: son combinables ---
+$ GET /enrollments?studentId=1&courseId=1
+[{"id":1,"student":{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":true},"course":{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}}]
+
+--- matrículas de Ana desde su propio recurso ---
+$ GET /students/1/enrollments
+[{"id":1,"course":{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}}]
+
+--- matrículas del curso Semana 5 desde su propio recurso ---
+$ GET /courses/1/enrollments
+[{"id":1,"student":{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":true},"course":{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}}]
+
+--- sin filtros: todas las matrículas ---
+$ GET /enrollments
+[{"id":1,"student":{"id":1,"name":"Ana Ruiz","email":"ana.ruiz@example.com","age":20,"career":"Computer Science","semester":5,"isActive":true},"course":{"id":1,"title":"Semana 5 · Relaciones persistentes","level":"intermediate"}}]
+
+Verificación cruzada en la base, con los nombres de cada lado:
+En DBeaver:
+ id | estudiante |               curso                
+----+------------+------------------------------------
+  1 | Ana Ruiz   | Semana 5 · Relaciones persistentes
+(1 row)
+
+
+
+════════════════════════════════════════════════════════
+PASO 7 · Cancelar la matrícula y comprobar que ya no se encuentra
+════════════════════════════════════════════════════════
+--- antes de cancelar: la integridad referencial está activa ---
+Ana y el curso Semana 5 están enlazados por la matrícula 1.
+Por eso no se pueden borrar, y la API responde 409 en vez del 500
+crudo que devolvería PostgreSQL:
+  DELETE /courses/1   -> HTTP 409
+  DELETE /students/1  -> HTTP 409
+
+Las claves foráneas que causan ese bloqueo:
+En DBeaver:
+            conname             |                             definicion                              
+--------------------------------+---------------------------------------------------------------------
+ FK_307813fe255896d6ebf3e6cd55c | FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE RESTRICT
+ FK_b79d0bf01779fdf9cfb6b092af3 | FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE RESTRICT
+(2 rows)
+
+
+ON DELETE RESTRICT impide borrar un estudiante o curso que aún tenga
+matrículas. El orden importa: hay que cancelar antes de poder borrar.
+
+--- estado antes de cancelar ---
+En DBeaver:
+ id | student_id | course_id 
+----+------------+-----------
+  1 |          1 |         1
+(1 row)
+
+
+--- cancelamos ---
+$ DELETE /enrollments/1
+HTTP 204
+204 No Content. El DELETE no devuelve cuerpo: la acción ya se hizo.
+
+--- la lista ya no la contiene ---
+$ GET /enrollments
+[]
+
+--- y la misma matrícula ya no se encuentra ---
+$ DELETE /enrollments/1   (otra vez)
+{"message":"Enrollment with id 1 not found","error":"Not Found","statusCode":404}
+HTTP 404
+Cancelar la matrícula borra el vínculo, no el estudiante ni el curso:
+En DBeaver:
+ estudiantes_vivos 
+-------------------
+                 1
+(1 row)
+
+
+En DBeaver:
+ cursos_vivos 
+--------------
+            1
+(1 row)
+
+
+
+--- ahora que no quedan matrículas, los mismos borrados sí funcionan ---
+Antes devolvían 409 por la clave foránea. La diferencia es el vínculo:
+  DELETE /courses/1   -> HTTP 204
+  DELETE /students/1  -> HTTP 204
+
+════════════════════════════════════════════════════════
+Comprobaciones adicionales de integridad
+════════════════════════════════════════════════════════
+--- correo único: la API lo comprueba antes de llegar a la base ---
+Se reintenta el correo de Luis (2), que sigue existiendo:
+$ POST /students con un correo que ya existe
+{"message":"Email is already registered","error":"Conflict","statusCode":409}
+HTTP 409
+Los índices que respaldan esa regla en la tabla students:
+En DBeaver:
+           indexname            
+--------------------------------
+ PK_7d7f07271ad4ce999880713f05e
+ UQ_25985d58c714a4a427ced57507b
+(2 rows)
+
+
+Y no se creó una tercera estudiante con el mismo correo:
+En DBeaver:
+ id |   name   |        email         
+----+----------+----------------------
+  2 | Luis Paz | luis.paz@example.com
+(1 row)
+
+
+--- recursos inexistentes y parámetros inválidos ---
+  GET /courses/999999        -> HTTP 404   (recurso inexistente)
+  GET /courses/abc           -> HTTP 400      (id no numérico)
+  DELETE /enrollments/999999 -> HTTP 404   (recurso inexistente)
+  DELETE /courses/abc        -> HTTP 400
+
+--- validación de cuerpo: propiedad desconocida rechazada ---
+$ POST /courses con un campo id que el cliente no debería enviar
+{"message":["property id should not exist"],"error":"Bad Request","statusCode":400}
+HTTP 400
+--- esquema final de la tabla de matrículas ---
+En DBeaver:
+ column_name | data_type | is_nullable 
+-------------+-----------+-------------
+ id          | integer   | NO
+ student_id  | integer   | NO
+ course_id   | integer   | NO
+(3 rows)
+
+
+
+════════════════════════════════════════════════════════
+Resumen de los siete casos
+════════════════════════════════════════════════════════
+  1. Curso y estudiante activo creados ............ HTTP 201, filas en PostgreSQL
+  2. Matrícula válida creada ..................... HTTP 201, con ambas relaciones
+  3. API reiniciada, la matrícula sigue ahí ...... HTTP 200, no se perdió nada
+  4. Pareja repetida .............................. HTTP 409 Conflict
+  5. Estudiante inactivo............................ HTTP 400 Bad Request
+  6. Filtros por estudiante, por curso y ambos .... HTTP 200, cada uno restringe
+  7. Matrícula cancelada .......................... HTTP 204, luego HTTP 404
+
+ids usados:  CID=1  CID2=2  SID=1  SID2=2  EID=1
