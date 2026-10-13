@@ -1,0 +1,26 @@
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [NestFactory] Starting Nest application...
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [InstanceLoader] AppModule dependencies initialized +6ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [InstanceLoader] CoursesModule dependencies initialized +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [InstanceLoader] StudentsModule dependencies initialized +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [InstanceLoader] EnrollmentsModule dependencies initialized +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RoutesResolver] AppController {/}: +3ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/, GET} route +1ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RoutesResolver] CoursesController {/courses}: +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/courses, POST} route +1ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/courses, GET} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/courses/:id, GET} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/courses/:id, PATCH} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/courses/:id, DELETE} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RoutesResolver] StudentsController {/students}: +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/students, POST} route +1ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/students, GET} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/students/:id, GET} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/students/:id, PATCH} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/students/:id, DELETE} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RoutesResolver] EnrollmentsController {/}: +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/enrollments, POST} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/enrollments, GET} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/students/:studentId/enrollments, GET} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/courses/:courseId/enrollments, GET} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [RouterExplorer] Mapped {/enrollments/:id, DELETE} route +0ms
+[Nest] 30036  - 13/10/2026, 12:18:15 p.m.     LOG [NestApplication] Nest application successfully started +1ms

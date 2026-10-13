@@ -1,0 +1,306 @@
+############ DATOS BASE ############
+
+============================================================
+# Bienvenida
+============================================================
+-> http://localhost:3000/
+HTTP 200
+CourseHub API - Cursos, Estudiantes y Matrículas
+
+============================================================
+# Cursos disponibles
+============================================================
+-> http://localhost:3000/courses
+HTTP 200
+[
+  {
+    "id": 1,
+    "name": "Aplicaciones para el servidor web",
+    "code": "ASW-501",
+    "credits": 4,
+    "teacher": "Edgardo Panchana"
+  },
+  {
+    "id": 2,
+    "name": "Bases de Datos Avanzadas",
+    "code": "BDA-401",
+    "credits": 3,
+    "teacher": "Marta Ruiz"
+  }
+]
+
+============================================================
+# Estudiantes (id 3 = Mariana Gómez, INACTIVA)
+============================================================
+-> http://localhost:3000/students
+HTTP 200
+[
+  {
+    "id": 1,
+    "name": "Ana Torres",
+    "email": "ana.torres@correo.com",
+    "active": true
+  },
+  {
+    "id": 2,
+    "name": "Luis Pérez",
+    "email": "luis.perez@correo.com",
+    "active": true
+  },
+  {
+    "id": 3,
+    "name": "Mariana Gómez",
+    "email": "mariana.gomez@correo.com",
+    "active": false
+  }
+]
+
+############ 1) MATRÍCULA VÁLIDA ############
+
+============================================================
+# POST /enrollments (Ana=1 en curso 2) -> 201
+============================================================
+-> -X POST http://localhost:3000/enrollments -H Content-Type: application/json -d {"studentId":1,"courseId":2}
+HTTP 201
+{
+  "id": 2,
+  "studentId": 1,
+  "courseId": 2
+}
+
+############ 2) MATRÍCULA DUPLICADA ############
+
+============================================================
+# POST /enrollments repetido (Ana=1, curso=2) -> 409
+============================================================
+-> -X POST http://localhost:3000/enrollments -H Content-Type: application/json -d {"studentId":1,"courseId":2}
+HTTP 409
+{
+  "message": "El estudiante 1 ya está matriculado en el curso 2",
+  "error": "Conflict",
+  "statusCode": 409
+}
+
+############ 3) ESTUDIANTE INACTIVO ############
+
+============================================================
+# POST /enrollments con estudiante inactivo (Mariana=3) -> 400
+============================================================
+-> -X POST http://localhost:3000/enrollments -H Content-Type: application/json -d {"studentId":3,"courseId":1}
+HTTP 400
+{
+  "message": "El estudiante con id 3 no está activo",
+  "error": "Bad Request",
+  "statusCode": 400
+}
+
+############ 4) RECURSO INEXISTENTE ############
+
+============================================================
+# POST /enrollments estudiante inexistente (999) -> 404
+============================================================
+-> -X POST http://localhost:3000/enrollments -H Content-Type: application/json -d {"studentId":999,"courseId":1}
+HTTP 404
+{
+  "message": "Estudiante con id 999 no encontrado",
+  "error": "Not Found",
+  "statusCode": 404
+}
+
+============================================================
+# POST /enrollments curso inexistente (999) -> 404
+============================================================
+-> -X POST http://localhost:3000/enrollments -H Content-Type: application/json -d {"studentId":1,"courseId":999}
+HTTP 404
+{
+  "message": "Curso con id 999 no encontrado",
+  "error": "Not Found",
+  "statusCode": 404
+}
+
+============================================================
+# DELETE /enrollments/999 -> 404
+============================================================
+-> -X DELETE http://localhost:3000/enrollments/999
+HTTP 404
+{
+  "message": "Matrícula con id 999 no encontrada",
+  "error": "Not Found",
+  "statusCode": 404
+}
+
+############ 5) IDENTIFICADOR DE RUTA INVÁLIDO (Pipe) ############
+
+============================================================
+# GET /courses/abc -> 400 (ParsePositiveIntPipe)
+============================================================
+-> http://localhost:3000/courses/abc
+HTTP 400
+{
+  "message": "El identificador \"NaN\" debe ser un número entero positivo",
+  "error": "Bad Request",
+  "statusCode": 400
+}
+
+============================================================
+# GET /students/-5/enrollments -> 400
+============================================================
+-> http://localhost:3000/students/-5/enrollments
+HTTP 400
+{
+  "message": "El identificador \"-5\" debe ser un número entero positivo",
+  "error": "Bad Request",
+  "statusCode": 400
+}
+
+############ 6) VALIDACIÓN DTO (whitelist / forbidNonWhitelisted) ############
+
+============================================================
+# POST /enrollments con campo no permitido -> 400
+============================================================
+-> -X POST http://localhost:3000/enrollments -H Content-Type: application/json -d {"studentId":1,"courseId":1,"hack":true}
+HTTP 400
+{
+  "message": [
+    "property hack should not exist"
+  ],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+
+============================================================
+# POST /enrollments con tipo inválido -> 400
+============================================================
+-> -X POST http://localhost:3000/enrollments -H Content-Type: application/json -d {"studentId":"uno","courseId":1}
+HTTP 400
+{
+  "message": [
+    "studentId must not be less than 1",
+    "studentId must be an integer number"
+  ],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+
+############ 7) FILTROS COMBINABLES ############
+
+============================================================
+# GET /enrollments (todas)
+============================================================
+-> http://localhost:3000/enrollments
+HTTP 200
+[
+  {
+    "id": 1,
+    "studentId": 1,
+    "courseId": 1
+  },
+  {
+    "id": 2,
+    "studentId": 1,
+    "courseId": 2
+  }
+]
+
+============================================================
+# GET /enrollments?studentId=1
+============================================================
+-> http://localhost:3000/enrollments?studentId=1
+HTTP 200
+[
+  {
+    "id": 1,
+    "studentId": 1,
+    "courseId": 1
+  },
+  {
+    "id": 2,
+    "studentId": 1,
+    "courseId": 2
+  }
+]
+
+============================================================
+# GET /enrollments?courseId=1
+============================================================
+-> http://localhost:3000/enrollments?courseId=1
+HTTP 200
+[
+  {
+    "id": 1,
+    "studentId": 1,
+    "courseId": 1
+  }
+]
+
+============================================================
+# GET /enrollments?studentId=1&courseId=1 (combinado)
+============================================================
+-> http://localhost:3000/enrollments?studentId=1&courseId=1
+HTTP 200
+[
+  {
+    "id": 1,
+    "studentId": 1,
+    "courseId": 1
+  }
+]
+
+############ 8) CONSULTAS ANIDADAS ############
+
+============================================================
+# GET /students/1/enrollments
+============================================================
+-> http://localhost:3000/students/1/enrollments
+HTTP 200
+[
+  {
+    "id": 1,
+    "studentId": 1,
+    "courseId": 1
+  },
+  {
+    "id": 2,
+    "studentId": 1,
+    "courseId": 2
+  }
+]
+
+============================================================
+# GET /courses/1/enrollments
+============================================================
+-> http://localhost:3000/courses/1/enrollments
+HTTP 200
+[
+  {
+    "id": 1,
+    "studentId": 1,
+    "courseId": 1
+  }
+]
+
+############ 9) CANCELAR MATRÍCULA ############
+
+============================================================
+# DELETE /enrollments/1 -> 200
+============================================================
+-> -X DELETE http://localhost:3000/enrollments/1
+HTTP 200
+{
+  "id": 1,
+  "studentId": 1,
+  "courseId": 1
+}
+
+============================================================
+# GET /enrollments tras cancelar
+============================================================
+-> http://localhost:3000/enrollments
+HTTP 200
+[
+  {
+    "id": 2,
+    "studentId": 1,
+    "courseId": 2
+  }
+]
