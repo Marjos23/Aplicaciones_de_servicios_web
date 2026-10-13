@@ -50,7 +50,15 @@ export class CoursesService {
   }
 
   create(dto: CreateCourseDto): Course {
-    const course: Course = { id: this.nextId++, ...dto };
+    const course: Course = {
+      id: this.nextId,
+      name: dto.name,
+      code: dto.code,
+      credits: dto.credits,
+      teacher: dto.teacher,
+    };
+
+    this.nextId++;
     this.courses.push(course);
     return course;
   }
