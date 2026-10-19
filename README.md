@@ -35,16 +35,19 @@ las claves sin valores reales.
 
 | Variable | Para qué sirve |
 | --- | --- |
+| `NODE_ENV` | Ambiente: `development`, `test` o `production`. Por defecto `development`. Fuera de `development`, TypeORM deja de sincronizar el esquema. |
 | `PORT` | Puerto de la API. Por defecto `3000`. |
-| `DATABASE_HOST` | Host de PostgreSQL. |
-| `DATABASE_PORT` | Puerto de PostgreSQL. El contenedor lo publica en `5434`. |
-| `DATABASE_NAME` | Nombre de la base. |
-| `DATABASE_USER` | Usuario de PostgreSQL. |
-| `DATABASE_PASSWORD` | Contraseña de PostgreSQL. |
-| `DATABASE_LOGGING` | Con `true` imprime las consultas SQL en la terminal. Útil para aprender; déjalo en `false` fuera del desarrollo. |
+| `DATABASE_HOST` | Host de PostgreSQL. Obligatoria. |
+| `DATABASE_PORT` | Puerto de PostgreSQL. Por defecto `5432`. El contenedor lo publica en `5434`. |
+| `DATABASE_NAME` | Nombre de la base. Obligatoria. |
+| `DATABASE_USER` | Usuario de PostgreSQL. Obligatoria. |
+| `DATABASE_PASSWORD` | Contraseña de PostgreSQL. Obligatoria (se admite vacía solo si el servidor la acepta). |
+| `DATABASE_LOGGING` | Con `true` imprime las consultas SQL en la terminal. Por defecto `false`. Útil para aprender; déjalo en `false` fuera del desarrollo. |
 
-Si falta una variable obligatoria, la aplicación se detiene al arrancar con un
-error que la nombra, en lugar de fallar de forma confusa más adelante.
+`ConfigModule` valida estas variables con un esquema de **Joi** *antes* de
+intentar conectar a PostgreSQL. Una variable ausente, un puerto no numérico o
+un `NODE_ENV` desconocido detienen el arranque con un error que nombra la
+variable culpable, en lugar de fallar de forma confusa más adelante.
 
 ## Puesta en marcha
 
@@ -77,9 +80,10 @@ un curso que todavía tenga matrículas. Cancelar la matrícula es una decisión
 explícita (`DELETE /enrollments/:id`), nunca una consecuencia de borrar el
 recurso.
 
-`synchronize: true` ajusta el esquema a las entidades y es una comodidad de
-desarrollo local. En producción el esquema debe cambiar mediante migraciones
-revisadas.
+`synchronize` se activa solo cuando `NODE_ENV=development`. Ajusta el esquema
+a las entidades y es una comodidad de desarrollo local. En `production` queda
+en `false`: el esquema debe cambiar mediante migraciones revisadas. La
+decisión la toma el ambiente, no un valor escrito en TypeScript.
 
 ## Endpoints
 

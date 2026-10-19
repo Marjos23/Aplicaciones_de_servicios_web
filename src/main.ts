@@ -1,4 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
@@ -18,6 +19,12 @@ async function bootstrap() {
 
   app.enableCors();
 
-  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
+  // El puerto vive en el entorno, no en el código. Si PORT no está definida
+  // o es inválida, la aplicación ya se habrá detenido durante la validación
+  // de ConfigModule; aquí solo se lee el valor garantizado.
+  const config = app.get(ConfigService);
+  const port = config.getOrThrow<number>('PORT');
+
+  await app.listen(port, '0.0.0.0');
 }
 bootstrap();
