@@ -8,6 +8,13 @@ import { QueryFailedError, Repository } from 'typeorm';
 import { Course } from './entities/course.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { CoursesQueryDto } from './dto/courses-query.dto';
+
+/** Forma estable de toda lista paginada: elementos y metadatos. */
+export interface Paginated<T> {
+  items: T[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
 
 @Injectable()
 export class CoursesService {
@@ -16,11 +23,32 @@ export class CoursesService {
     private readonly coursesRepository: Repository<Course>,
   ) {}
 
-  findAll(level?: string): Promise<Course[]> {
-    return this.coursesRepository.find({
+  async findAll(
+    query: Partial<CoursesQueryDto> = {},
+  ): Promise<Paginated<Course>> {
+    const {
+      level,
+      page = 1,
+      limit = 10,
+      sortBy = 'id',
+      order = 'ASC',
+    } = query;
+
+    // findAndCount entrega la página pedida y el total que cumple el
+    // filtro en una sola consulta. skip = (page - 1) * limit omite las
+    // filas de las páginas anteriores; sin un orden fijo, la segunda
+    // página podría repetir o saltarse cursos entre solicitudes.
+    const [items, total] = await this.coursesRepository.findAndCount({
       where: level ? { level } : {},
-      order: { id: 'ASC' },
+      order: { [sortBy]: order },
+      skip: (page - 1) * limit,
+      take: limit,
     });
+
+    return {
+      items,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: number): Promise<Course> {

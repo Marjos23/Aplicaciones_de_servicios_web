@@ -180,7 +180,8 @@ describe('CourseHub API (e2e HTTP)', () => {
       .query({ studentId })
       .expect(200);
 
-    expect(list.body).toHaveLength(1);
+    expect(list.body.items).toHaveLength(1);
+    expect(list.body.meta.total).toBe(1);
   });
 
   it('devuelve 409 al repetir la misma matrícula', () => {
@@ -230,7 +231,6 @@ describe('CourseHub API (e2e HTTP)', () => {
       .expect(200);
     expect(byCourse.body).toHaveLength(1);
   });
-
   it('devuelve 404 al pedir las matrículas de un curso inexistente', () => {
     return request(app.getHttpServer())
       .get('/courses/999999/enrollments')
@@ -241,7 +241,7 @@ describe('CourseHub API (e2e HTTP)', () => {
     const list = await request(app.getHttpServer())
       .get(`/enrollments?studentId=${studentId}`)
       .expect(200);
-    const id = list.body[0].id;
+    const id = list.body.items[0].id;
 
     await request(app.getHttpServer()).delete(`/enrollments/${id}`).expect(204);
 
@@ -250,7 +250,8 @@ describe('CourseHub API (e2e HTTP)', () => {
     const after = await request(app.getHttpServer())
       .get(`/enrollments?studentId=${studentId}`)
       .expect(200);
-    expect(after.body).toHaveLength(0);
+    expect(after.body.items).toHaveLength(0);
+    expect(after.body.meta.total).toBe(0);
   });
 
   it('devuelve 409 al borrar un recurso que tiene matrículas', async () => {

@@ -90,9 +90,9 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
 
     // La fila existe y sus claves foráneas apuntan a las tablas correctas.
     const found = await enrollmentsService.findAll({ studentId });
-    expect(found).toHaveLength(1);
-    expect(found[0].student.name).toBe('Ana Ruiz');
-    expect(found[0].course.title).toBe('NestJS Relations');
+    expect(found.items).toHaveLength(1);
+    expect(found.items[0].student.name).toBe('Ana Ruiz');
+    expect(found.items[0].course.title).toBe('NestJS Relations');
   });
 
   it('3. la matrícula sigue disponible tras reiniciar la API', async () => {
@@ -149,26 +149,27 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
     await enrollmentsService.create({ studentId, courseId: second.id });
 
     const byStudent = await enrollmentsService.findAll({ studentId });
-    expect(byStudent).toHaveLength(2);
+    expect(byStudent.items).toHaveLength(2);
+    expect(byStudent.meta.total).toBe(2);
 
     const byCourse = await enrollmentsService.findAll({ courseId });
-    expect(byCourse).toHaveLength(1);
-    expect(byCourse[0].course.id).toBe(courseId);
+    expect(byCourse.items).toHaveLength(1);
+    expect(byCourse.items[0].course.id).toBe(courseId);
 
     // Filtros combinables: solo la matrícula que comparten ambos recursos.
     const both = await enrollmentsService.findAll({ studentId, courseId });
-    expect(both).toHaveLength(1);
-    expect(both[0].id).toBe(enrollmentId);
-    expect(both[0].student).toBeDefined();
-    expect(both[0].course).toBeDefined();
+    expect(both.items).toHaveLength(1);
+    expect(both.items[0].id).toBe(enrollmentId);
+    expect(both.items[0].student).toBeDefined();
+    expect(both.items[0].course).toBeDefined();
 
     // Ninguna combinación devuelve filas ajenas.
     const other = await enrollmentsService.findAll({
       studentId,
       courseId: second.id,
     });
-    expect(other).toHaveLength(1);
-    expect(other[0].course.id).toBe(second.id);
+    expect(other.items).toHaveLength(1);
+    expect(other.items[0].course.id).toBe(second.id);
   });
 
   it('7. cancela la matrícula y ya no se encuentra', async () => {
@@ -180,7 +181,8 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
 
     const remaining = await enrollmentsService.findAll({ courseId });
-    expect(remaining).toHaveLength(0);
+    expect(remaining.items).toHaveLength(0);
+    expect(remaining.meta.total).toBe(0);
   });
 
   it('devuelve 404 al matricular contra recursos inexistentes', async () => {

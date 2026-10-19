@@ -11,6 +11,7 @@ import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { EnrollmentQueryDto } from './dto/enrollment-query.dto';
 import { Student } from '../students/entities/student.entity';
 import { Course } from '../courses/entities/course.entity';
+import { Paginated } from '../courses/courses.service';
 
 @Injectable()
 export class EnrollmentsService {
@@ -63,19 +64,65 @@ export class EnrollmentsService {
     }
   }
 
-  findAll(filters: EnrollmentQueryDto = {}): Promise<Enrollment[]> {
-    return this.enrollmentsRepository.find({
-      where: {
-        ...(filters.studentId !== undefined
-          ? { student: { id: filters.studentId } }
-          : {}),
-        ...(filters.courseId !== undefined
-          ? { course: { id: filters.courseId } }
-          : {}),
+  /**
+   * Consulta compuesta de matrículas (Semana 6, sesión 12).
+   *
+   * QueryBuilder permite encadenar JOINs y condiciones opcionales sin
+   * salir de TypeORM. Cada filtro se añade solo si el cliente lo pidió,
+   * de modo que se combinan sin sobrescribirse.
+   */
+  async findAll(
+    query: Partial<EnrollmentQueryDto> = {},
+  ): Promise<Paginated<Enrollment>> {
+    // Los defaults del DTO se aplican al pasar por ValidationPipe. Las
+    // llamadas internas (findByStudent, findByCourse) llegan con un objeto
+    // literal, así que aquí también se fijan los valores por defecto.
+    const { page = 1, limit = 10 } = query;
+
+    const qb = this.enrollmentsRepository
+      .createQueryBuilder('enrollment')
+      .leftJoinAndSelect('enrollment.student', 'student')
+      .leftJoinAndSelect('enrollment.course', 'course');
+
+    if (query.search) {
+      // El marcador :search separa el dato de la instrucción SQL: el
+      // texto del cliente nunca se interpola en la consulta. ILIKE
+      // busca sin distinguir mayúsculas; el paréntesis mantiene juntas
+      // las dos alternativas antes de combinarse con los demás filtros.
+      qb.andWhere(
+        '(student.name ILIKE :search OR course.title ILIKE :search)',
+        { search: `%${query.search.trim()}%` },
+      );
+    }
+
+    if (query.studentId !== undefined) {
+      qb.andWhere('student.id = :studentId', { studentId: query.studentId });
+    }
+
+    if (query.courseId !== undefined) {
+      qb.andWhere('course.id = :courseId', { courseId: query.courseId });
+    }
+
+    if (query.activeOnly === 'true') {
+      qb.andWhere('student.isActive = :active', { active: true });
+    }
+
+    // Orden fijo por id: hace reproducible el recorrido de páginas.
+    qb.orderBy('enrollment.id', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
-      relations: { student: true, course: true },
-      order: { id: 'ASC' },
-    });
+    };
   }
 
   async findByStudent(studentId: number): Promise<Enrollment[]> {
@@ -83,7 +130,8 @@ export class EnrollmentsService {
     if (!student) {
       throw new NotFoundException(`Student with id ${studentId} not found`);
     }
-    return this.findAll({ studentId });
+    const { items } = await this.findAll({ studentId });
+    return items;
   }
 
   async findByCourse(courseId: number): Promise<Enrollment[]> {
@@ -93,7 +141,8 @@ export class EnrollmentsService {
     if (!course) {
       throw new NotFoundException(`Course with id ${courseId} not found`);
     }
-    return this.findAll({ courseId });
+    const { items } = await this.findAll({ courseId });
+    return items;
   }
 
   async remove(id: number): Promise<Enrollment> {

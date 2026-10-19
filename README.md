@@ -91,7 +91,7 @@ decisión la toma el ambiente, no un valor escrito en TypeScript.
 
 | Método | Ruta | Respuesta |
 | --- | --- | --- |
-| `GET` | `/courses` | Lista todos. Filtro opcional `?level=`. |
+| `GET` | `/courses` | Lista paginada. Filtro `?level=`, `?page=`, `?limit=`, `?sortBy=`, `?order=`. |
 | `GET` | `/courses/:id` | `404` si no existe. |
 | `POST` | `/courses` | Crea uno. `level` debe ser `beginner`, `intermediate` o `advanced`. |
 | `PATCH` | `/courses/:id` | Modifica solo los campos enviados. |
@@ -115,11 +115,51 @@ decisión la toma el ambiente, no un valor escrito en TypeScript.
 | Método | Ruta | Respuesta |
 | --- | --- | --- |
 | `POST` | `/enrollments` | Crea con `{ "studentId": 1, "courseId": 1 }`. |
-| `GET` | `/enrollments` | Lista todas. Filtros combinables `?studentId=`, `?courseId=`. |
+| `GET` | `/enrollments` | Lista paginada con búsqueda. Ver parámetros abajo. |
 | `DELETE` | `/enrollments/:id` | Cancela. `204`, o `404` si no existe. |
 
 Las consultas de matrículas devuelven el estudiante y el curso relacionados,
 porque una lista de identificadores sin contexto no es útil.
+
+### Consultas de la Semana 6
+
+`GET /courses` y `GET /enrollments` devuelven una forma estable con los
+elementos de la página y sus metadatos, nunca la colección entera:
+
+```json
+{
+  "items": [ { "id": 1, "title": "NestJS avanzado", "level": "beginner" } ],
+  "meta": { "total": 8, "page": 1, "limit": 3, "totalPages": 3 }
+}
+```
+
+| Endpoint | Parámetro | Para qué sirve |
+| --- | --- | --- |
+| `/courses` | `level` | Filtra por nivel exacto. |
+| `/courses` | `page`, `limit` | Seleccionan la ventana. `limit` máximo `50`. |
+| `/courses` | `sortBy=id\|title\|level`, `order=ASC\|DESC` | Orden estable de la página. |
+| `/enrollments` | `search` | Búsqueda parcial por nombre de estudiante o título de curso (`ILIKE`, sin distinguir mayúsculas). |
+| `/enrollments` | `studentId`, `courseId` | Filtros exactos, combinables entre sí y con `search`. |
+| `/enrollments` | `activeOnly=true` | Solo matrículas de estudiantes activos. |
+| `/enrollments` | `page`, `limit` | Paginación. `limit` máximo `50`. |
+
+Reglas de seguridad y consistencia:
+
+- `sortBy` **no** se usa como nombre de columna libre: se compara contra una
+  lista cerrada (`id`, `title`, `level`) y cualquier otro valor responde `400`.
+- `search` viaja como parámetro vinculado (`:search`), nunca interpolado en el
+  SQL, de modo que una entrada como `' OR 1=1 --` se trata como texto.
+- El orden por defecto (`enrollment.id`) hace reproducible el recorrido: dos
+  páginas consecutivas no repiten ni saltan registros.
+- Una búsqueda sin coincidencias responde `200` con `items: []` y `total: 0`,
+  porque la colección existe aunque ninguna fila coincida.
+
+Ejemplo:
+
+```
+GET /courses?level=beginner&page=2&limit=5&sortBy=title&order=ASC
+GET /enrollments?search=nest&activeOnly=true&page=1&limit=5
+```
 
 ### Códigos de error de la matrícula
 
@@ -149,9 +189,9 @@ completa por HTTP y con PostgreSQL de verdad, para comprobar que las claves
 foráneas y los índices únicos funcionan realmente.
 
 Para no mezclarse con los datos de desarrollo, cada suite usa tablas con
-prefijo propio (`demo_`, `http_`) y las elimina al terminar. Las pruebas de
-`.env` usan la misma base de datos: si `DATABASE_NAME` no es válida, fallarán
-antes de empezar.
+prefijo propio (`demo_`, `http_`, `query_`) y las elimina al terminar. Las
+pruebas de `.env` usan la misma base de datos: si `DATABASE_NAME` no es válida,
+fallarán antes de empezar.
 
 ### Los siete casos de la demostración
 
@@ -167,6 +207,19 @@ antes de empezar.
 
 Los casos 4 y 5 también atacan la base de datos por su cuenta, para
 comprobar que el índice único y la clave foránea respaldan al servicio.
+
+### Filtros, paginación y búsqueda (Semana 6)
+
+`test/queries.e2e-spec.ts` comprueba por HTTP el contrato de la Semana 6:
+
+- paginación con `items`/`meta`, `totalPages` y recorrido de dos páginas sin
+  repetir registros;
+- filtro por `level`, orden `ASC`/`DESC` y los cuatro parámetros inválidos
+  (`page=0`, `limit=200`, `sortBy` no permitido, `order` distinto de `ASC`/`DESC`)
+  respondiendo `400`;
+- búsqueda `ILIKE` parcial sobre estudiante y curso, combinada con filtros y
+  paginación, con `200` y lista vacía cuando no hay coincidencias;
+- un intento de inyección SQL (`' OR 1=1 --`) tratado como texto.
 
 ## Estructura
 

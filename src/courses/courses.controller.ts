@@ -13,6 +13,7 @@ import {
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { CoursesQueryDto } from './dto/courses-query.dto';
 import { ParseIntPipe } from '../common/pipes/parse-int.pipe';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 
@@ -24,8 +25,8 @@ export class CoursesController {
   ) {}
 
   @Get()
-  findAll(@Query('level') level?: string) {
-    return this.coursesService.findAll(level);
+  findAll(@Query() query: CoursesQueryDto) {
+    return this.coursesService.findAll(query);
   }
 
   // Esta ruta se declara antes que ':id' para que 'enrollments' no se
