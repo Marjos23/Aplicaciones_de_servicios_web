@@ -12,6 +12,9 @@ import { StudentsModule } from './students/students.module';
 import { Student } from './students/entities/student.entity';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { Enrollment } from './enrollments/entities/enrollment.entity';
+import { UsersModule } from './users/users.module';
+import { User } from './users/entities/user.entity';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -43,7 +46,7 @@ import { Enrollment } from './enrollments/entities/enrollment.entity';
         username: config.getOrThrow('DATABASE_USER'),
         password: config.getOrThrow('DATABASE_PASSWORD'),
         database: config.getOrThrow('DATABASE_NAME'),
-        entities: [Course, Student, Enrollment],
+        entities: [Course, Student, Enrollment, User],
         // synchronize ajusta el esquema a las entidades. Es una comodidad
         // de desarrollo local, nunca una estrategia de producción: allí el
         // esquema cambia mediante migraciones revisadas. La política la
@@ -55,6 +58,8 @@ import { Enrollment } from './enrollments/entities/enrollment.entity';
     CoursesModule,
     StudentsModule,
     EnrollmentsModule,
+    UsersModule,
+    AuthModule,
   ],
   controllers: [AppController, WelcomeController],
   providers: [AppService, WelcomeService],
