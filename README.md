@@ -26,7 +26,8 @@ npm run start:dev
 Pruebas y calidad de código:
 
 ```bash
-npm test             # pruebas unitarias / e2e (vitest)
+npm test             # pruebas unitarias (vitest)
+npm run test:e2e     # pruebas e2e de cursos, estudiantes y matrículas
 npm run build        # compila a dist/
 npm run lint         # análisis estático (oxlint)
 ```
@@ -276,11 +277,15 @@ Tras la cancelación, `GET /enrollments` ya no devuelve la matrícula eliminada.
 
 ## 8. Evidencias
 
-| Archivo                      | Contenido                                                        |
-|------------------------------|------------------------------------------------------------------|
-| `docs/demostracion.sh`       | Script reproducible de todos los casos                            |
-| `docs/DEMOSTRACION.txt`      | Salida real: válida, duplicada, inactivo, inexistente, filtros y cancelación |
-| `docs/ARRANQUE.txt`          | Log de arranque con los tres módulos y todas las rutas mapeadas   |
+| Archivo                        | Contenido                                                        |
+|--------------------------------|------------------------------------------------------------------|
+| `test/enrollments.e2e-spec.ts` | 9 pruebas automatizadas: alta, duplicado, inactivo, inexistente, filtros, consultas anidadas, cancelación, pipe y DTO |
+| `test/app.e2e-spec.ts`         | Prueba e2e del endpoint raíz                                     |
+| `docs/demostracion.sh`         | Script reproducible de todos los casos                            |
+| `docs/DEMOSTRACION.txt`        | Salida real: válida, duplicada, inactivo, inexistente, filtros y cancelación |
+| `docs/ARRANQUE.txt`            | Log de arranque con los tres módulos y todas las rutas mapeadas   |
+
+Resultado de `npm run test:e2e`: **2 archivos, 10 pruebas, todas aprobadas**.
 
 Datos semilla (en memoria):
 
