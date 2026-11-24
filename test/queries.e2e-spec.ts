@@ -4,6 +4,7 @@ import { getDataSourceToken } from '@nestjs/typeorm';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
+import { createTestAdmin } from './auth-helper';
 import {
   closeTestDataSource,
   createTestDataSource,
@@ -20,6 +21,12 @@ import {
 describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
+  let adminToken: string;
+
+  const http = () =>
+    request
+      .agent(app.getHttpServer())
+      .set('Authorization', `Bearer ${adminToken}`);
 
   const courseTitles = [
     'Análisis de APIs',
@@ -51,26 +58,27 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
       }),
     );
     await app.init();
+    adminToken = await createTestAdmin(app, dataSource);
 
     // Ocho cursos con títulos y niveles distintos: una lista de uno o dos
     // registros no permite comprobar una página real.
     const levels = ['beginner', 'advanced', 'intermediate'];
     for (let i = 0; i < courseTitles.length; i++) {
-      await request(app.getHttpServer())
+      await http()
         .post('/courses')
         .send({ title: courseTitles[i], level: levels[i % levels.length] })
         .expect(201);
     }
 
     // Estudiantes con nombres que permiten probar coincidencias parciales.
-    await request(app.getHttpServer()).post('/students').send({
+    await http().post('/students').send({
       name: 'Ana Torres',
       email: 'ana.torres@example.edu',
       age: 20,
       career: 'Software',
       semester: 4,
     });
-    await request(app.getHttpServer()).post('/students').send({
+    await http().post('/students').send({
       name: 'Anabel Gómez',
       email: 'anabel@example.edu',
       age: 22,
@@ -80,7 +88,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
 
     // Matrículas: dos de Ana (una en un curso con "API" en el título) y una
     // de Anabel en un curso NestJS.
-    const courses = await request(app.getHttpServer())
+    const courses = await http()
       .get('/courses?limit=50&sortBy=title')
       .expect(200);
     const byTitle = (fragment: string) =>
@@ -88,7 +96,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
         c.title.includes(fragment),
       ).id;
 
-    const students = await request(app.getHttpServer())
+    const students = await http()
       .get('/students?career=Software')
       .expect(200);
     const ana = students.body.find(
@@ -98,15 +106,15 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
       (s: { name: string }) => s.name === 'Anabel Gómez',
     ).id;
 
-    await request(app.getHttpServer())
+    await http()
       .post('/enrollments')
       .send({ studentId: ana, courseId: byTitle('Análisis') })
       .expect(201);
-    await request(app.getHttpServer())
+    await http()
       .post('/enrollments')
       .send({ studentId: ana, courseId: byTitle('Bases') })
       .expect(201);
-    await request(app.getHttpServer())
+    await http()
       .post('/enrollments')
       .send({ studentId: anabel, courseId: byTitle('NestJS') })
       .expect(201);
@@ -120,7 +128,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
 
   describe('GET /courses · filtros, paginación y ordenamiento', () => {
     it('devuelve items y meta con los valores por defecto', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/courses')
         .expect(200);
 
@@ -135,7 +143,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
     });
 
     it('limita el tamaño de la página y calcula totalPages', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/courses?page=1&limit=3&sortBy=title&order=ASC')
         .expect(200);
 
@@ -151,10 +159,10 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
     });
 
     it('recorre dos páginas sin repetir ni saltarse cursos', async () => {
-      const first = await request(app.getHttpServer())
+      const first = await http()
         .get('/courses?page=1&limit=3&sortBy=title&order=ASC')
         .expect(200);
-      const second = await request(app.getHttpServer())
+      const second = await http()
         .get('/courses?page=2&limit=3&sortBy=title&order=ASC')
         .expect(200);
 
@@ -166,7 +174,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
     });
 
     it('ordena de forma descendente por título', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/courses?sortBy=title&order=DESC&limit=1')
         .expect(200);
 
@@ -174,7 +182,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
     });
 
     it('filtra por level', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/courses?level=beginner')
         .expect(200);
 
@@ -185,7 +193,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
     });
 
     it('omite el filtro level cuando no se envía', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/courses')
         .expect(200);
       expect(res.body.meta.total).toBe(8);
@@ -197,7 +205,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
       ['sortBy=createdAt', 'campo de orden no permitido'],
       ['order=sideways', 'orden distinto de ASC/DESC'],
     ])('responde 400 con %s (%s)', (query) => {
-      return request(app.getHttpServer())
+      return http()
         .get(`/courses?${query}`)
         .expect(400);
     });
@@ -205,7 +213,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
 
   describe('GET /enrollments · búsqueda y filtros combinables', () => {
     it('busca por nombre de estudiante y título de curso sin distinguir mayúsculas', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/enrollments?search=nest')
         .expect(200);
 
@@ -216,14 +224,14 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
 
     it('la búsqueda parcial coincide con varios registros', async () => {
       // "Ana" aparece en Ana Torres y Anabel Gómez.
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/enrollments?search=ana')
         .expect(200);
       expect(res.body.meta.total).toBe(3);
     });
 
     it('devuelve 200 con lista vacía cuando la búsqueda no tiene resultados', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/enrollments?search=inexistente')
         .expect(200);
 
@@ -232,7 +240,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
     });
 
     it('combina búsqueda, filtro de estudiante y paginación', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/enrollments?search=ana&page=1&limit=2')
         .expect(200);
 
@@ -246,18 +254,18 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
     });
 
     it('filtra solo estudiantes activos con activeOnly=true', async () => {
-      const students = await request(app.getHttpServer())
+      const students = await http()
         .get('/students?career=Software')
         .expect(200);
       const anabel = students.body.find(
         (s: { name: string }) => s.name === 'Anabel Gómez',
       ).id;
-      await request(app.getHttpServer())
+      await http()
         .patch(`/students/${anabel}/status`)
         .send({ isActive: false })
         .expect(200);
 
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get('/enrollments?activeOnly=true')
         .expect(200);
       expect(res.body.meta.total).toBe(2);
@@ -267,14 +275,14 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
         ),
       ).toBe(true);
 
-      await request(app.getHttpServer())
+      await http()
         .patch(`/students/${anabel}/status`)
         .send({ isActive: true })
         .expect(200);
     });
 
     it('trata un intento de inyección SQL como texto, sin alterar la consulta', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await http()
         .get(`/enrollments?search=${encodeURIComponent("' OR 1=1 --")}`)
         .expect(200);
 
@@ -283,7 +291,7 @@ describe('CourseHub API · filtros, paginación y búsqueda (e2e)', () => {
     });
 
     it('responde 400 si limit supera el máximo', () => {
-      return request(app.getHttpServer())
+      return http()
         .get('/enrollments?limit=200')
         .expect(400);
     });

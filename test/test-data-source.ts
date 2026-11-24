@@ -2,8 +2,9 @@ import { DataSource } from 'typeorm';
 import { Course } from '../src/courses/entities/course.entity';
 import { Student } from '../src/students/entities/student.entity';
 import { Enrollment } from '../src/enrollments/entities/enrollment.entity';
+import { User } from '../src/users/entities/user.entity';
 
-const ENTITIES = [Course, Student, Enrollment];
+const ENTITIES = [Course, Student, Enrollment, User];
 
 /**
  * Conexión propia para las pruebas, separada de la de la aplicación.

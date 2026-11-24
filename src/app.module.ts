@@ -1,5 +1,7 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as Joi from 'joi';
 import { AppController } from './app.controller';
@@ -15,9 +17,13 @@ import { Enrollment } from './enrollments/entities/enrollment.entity';
 import { UsersModule } from './users/users.module';
 import { User } from './users/entities/user.entity';
 import { AuthModule } from './auth/auth.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { TimingInterceptor } from './common/interceptors/timing.interceptor';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     ConfigModule.forRoot({
       isGlobal: true,
       // La validación ocurre antes de conectar: si falta o sobra una
@@ -32,9 +38,10 @@ import { AuthModule } from './auth/auth.module';
         DATABASE_NAME: Joi.string().required(),
         DATABASE_USER: Joi.string().required(),
         DATABASE_PASSWORD: Joi.string().allow('').required(),
-        DATABASE_LOGGING: Joi.string()
-          .valid('true', 'false')
-          .default('false'),
+        DATABASE_LOGGING: Joi.string().valid('true', 'false').default('false'),
+        JWT_SECRET: Joi.string().min(32).required(),
+        JWT_EXPIRES_IN: Joi.string().default('15m'),
+        CORS_ORIGINS: Joi.string().default('http://localhost:5173'),
       }),
     }),
     TypeOrmModule.forRootAsync({
@@ -62,6 +69,18 @@ import { AuthModule } from './auth/auth.module';
     AuthModule,
   ],
   controllers: [AppController, WelcomeController],
-  providers: [AppService, WelcomeService],
+  providers: [
+    AppService,
+    WelcomeService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_INTERCEPTOR, useClass: TimingInterceptor },
+  ],
 })
-export class AppModule {}
+export class AppModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer
+      .apply(RequestLoggerMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+  }
+}

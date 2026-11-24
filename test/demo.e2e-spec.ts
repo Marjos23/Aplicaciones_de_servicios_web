@@ -10,6 +10,10 @@ import { CoursesService } from '../src/courses/courses.service';
 import { Enrollment } from '../src/enrollments/entities/enrollment.entity';
 import { Student } from '../src/students/entities/student.entity';
 import { Course } from '../src/courses/entities/course.entity';
+import { TypeOrmCourseRepository } from '../src/courses/adapters/typeorm-course.repository';
+import { UpdateCourseUseCase } from '../src/courses/use-cases/update-course.use-case';
+import type { AuthenticatedUser } from '../src/auth/interfaces/authenticated-user.interface';
+import { UserRole } from '../src/users/user-role.enum';
 import {
   closeTestDataSource,
   createTestDataSource,
@@ -27,6 +31,13 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
   let enrollmentsService: EnrollmentsService;
   let studentService: StudentService;
   let coursesService: CoursesService;
+  let updateCourse: UpdateCourseUseCase;
+
+  const admin: AuthenticatedUser = {
+    id: 1,
+    email: 'demo-admin@example.com',
+    role: UserRole.ADMIN,
+  };
 
   let courseId: number;
   let studentId: number;
@@ -45,6 +56,9 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
     );
     studentService = new StudentService(source.getRepository(Student));
     coursesService = new CoursesService(source.getRepository(Course));
+    updateCourse = new UpdateCourseUseCase(
+      new TypeOrmCourseRepository(source.getRepository(Course)),
+    );
   }
 
   beforeAll(async () => {
@@ -60,10 +74,13 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
   });
 
   it('1. crea un curso y un estudiante activo', async () => {
-    const course = await coursesService.create({
-      title: 'NestJS Relations',
-      level: 'intermediate',
-    });
+    const course = await coursesService.create(
+      {
+        title: 'NestJS Relations',
+        level: 'intermediate',
+      },
+      admin,
+    );
     expect(course.id).toBeGreaterThan(0);
 
     const student = await studentService.create({
@@ -129,10 +146,13 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
   it('5. rechaza con 400 matricular un estudiante inactivo', async () => {
     await studentService.updateStatus(studentId, false);
 
-    const otherCourse = await coursesService.create({
-      title: 'Curso para inactivo',
-      level: 'beginner',
-    });
+    const otherCourse = await coursesService.create(
+      {
+        title: 'Curso para inactivo',
+        level: 'beginner',
+      },
+      admin,
+    );
 
     await expect(
       enrollmentsService.create({ studentId, courseId: otherCourse.id }),
@@ -142,10 +162,13 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
   });
 
   it('6. filtra las matrículas por estudiante y por curso', async () => {
-    const second = await coursesService.create({
-      title: 'Segundo curso',
-      level: 'beginner',
-    });
+    const second = await coursesService.create(
+      {
+        title: 'Segundo curso',
+        level: 'beginner',
+      },
+      admin,
+    );
     await enrollmentsService.create({ studentId, courseId: second.id });
 
     const byStudent = await enrollmentsService.findAll({ studentId });
@@ -218,15 +241,20 @@ describe('CourseHub API · demostración de la semana 5 (e2e)', () => {
   });
 
   it('no permite modificar el id desde el cuerpo', async () => {
-    const course = await coursesService.create({
-      title: 'Inmutable',
-      level: 'beginner',
-    });
+    const course = await coursesService.create(
+      {
+        title: 'Inmutable',
+        level: 'beginner',
+      },
+      admin,
+    );
 
-    // Un cuerpo con "id" se descarta: el DTO y el servicio ignoran la propiedad.
-    const updated = await coursesService.update(course.id, {
-      title: 'Renombrado',
-    });
+    // Un cuerpo con "id" se descarta: el DTO y el caso de uso ignoran la propiedad.
+    const updated = await updateCourse.execute(
+      course.id,
+      { title: 'Renombrado' },
+      admin,
+    );
 
     expect(updated.id).toBe(course.id);
     expect(updated.title).toBe('Renombrado');

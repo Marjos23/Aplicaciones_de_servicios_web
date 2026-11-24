@@ -9,7 +9,12 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { UserRole } from '../users/user-role.enum';
 import { StudentService } from './student.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
@@ -39,11 +44,15 @@ export class StudentController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   create(@Body() body: CreateStudentDto) {
     return this.studentService.create(body);
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateStudentDto,
@@ -52,6 +61,8 @@ export class StudentController {
   }
 
   @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateStudentStatusDto,
@@ -61,6 +72,8 @@ export class StudentController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.studentService.remove(id);
   }

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<indexing>
+ <object alt="" name="Picture 1" object_type="graphic"/>
+ <object alt="" name="Picture 2" object_type="graphic"/>
+ <object alt="" name="Picture 3" object_type="graphic"/>
+ <object alt="" name="Picture 4" object_type="graphic"/>
+ <object alt="" name="Picture 5" object_type="graphic"/>
+ <paragraph index="24" node_type="writer">Semana 10 · Autorización y seguridad de acceso</paragraph>
+ <paragraph index="25" node_type="writer">Curso: Aplicaciones de Servicios Web
+Sesiones 19 y 20 · CourseHub API
+Fecha: 17/11/2026</paragraph>
+ <paragraph index="27" node_type="writer">1. Alcance verificado</paragraph>
+ <paragraph index="28" node_type="writer">User tiene un rol controlado y el valor por defecto es el de menor privilegio.</paragraph>
+ <paragraph index="29" node_type="writer">Existe una ruta exclusiva de administración protegida por JWT y rol; una identidad válida sin rol recibe 403.</paragraph>
+ <paragraph index="30" node_type="writer">Existe una regla de propiedad en una operación de actualización: un docente no modifica el curso de otro docente.</paragraph>
+ <paragraph index="31" node_type="writer">CORS admite únicamente los orígenes documentados para el entorno.</paragraph>
+ <paragraph index="32" node_type="writer">POST /auth/login tiene limitación de solicitudes y responde 429 cuando se excede.</paragraph>
+ <paragraph index="33" node_type="writer">El README declara HTTPS/TLS como requisito de producción.</paragraph>
+ <paragraph index="34" node_type="writer">2. Ambiente de ejecución</paragraph>
+ <paragraph index="35" node_type="writer">Aplicación iniciada en modo development con NODE_ENV=development.</paragraph>
+ <paragraph index="36" node_type="writer">PostgreSQL 17 levantado con Docker en el contenedor coursehub_db, puerto 5434 y base coursehub-api. Fuera de development, TypeORM deja de sincronizar el esquema.</paragraph>
+ <paragraph index="37" node_type="writer">Cuentas de práctica creadas solo en la base local. El registro público siempre crea cuentas con rol student; los roles de práctica se asignaron de forma controlada mediante SQL, sin exponer contraseñas ni tokens.</paragraph>
+ <paragraph index="38" node_type="writer">3. Rol controlado y menor privilegio</paragraph>
+ <paragraph index="39" node_type="writer">export enum UserRole {
+  ADMIN = 'admin',
+  TEACHER = 'teacher',
+  STUDENT = 'student',
+}
+
+@Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
+role: UserRole;</paragraph>
+ <paragraph index="40" node_type="writer">La enumeración cierra los valores posibles y el valor por defecto es student. RegisterDto no acepta el campo role: ValidationPipe rechaza cualquier propiedad desconocida con 400.</paragraph>
+ <paragraph index="41" node_type="writer">docker exec coursehub_db psql -U postgres -d coursehub-api \
+  -c &quot;UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';&quot;</paragraph>
+ <paragraph index="42" node_type="writer">Evidencia observada en GET /auth/me:</paragraph>
+ <paragraph index="43" node_type="writer">admin  -&gt; {&quot;id&quot;:15,&quot;email&quot;:&quot;...&quot;,&quot;role&quot;:&quot;admin&quot;}
+estudiante -&gt; {&quot;id&quot;:18,&quot;email&quot;:&quot;...&quot;,&quot;role&quot;:&quot;student&quot;}</paragraph>
+ <paragraph index="45" node_type="writer">Imagen 1. Respuesta de /auth/me para una cuenta admin y una student.</paragraph>
+ <paragraph index="46" node_type="writer">El rol se consulta en la base en cada solicitud, por lo que un cambio de rol surte efecto sin esperar a que venza el token.</paragraph>
+ <paragraph index="47" node_type="writer">4. Ruta exclusiva de administración</paragraph>
+ <paragraph index="48" node_type="writer">@Delete(':id')
+@HttpCode(HttpStatus.NO_CONTENT)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
+remove(@Param('id', ParseIntPipe) id: number) {
+  return this.coursesService.remove(id);
+}</paragraph>
+ <paragraph index="49" node_type="writer">JwtAuthGuard verifica la identidad y deja req.user; RolesGuard lee después la política declarada con @Roles(). Un token ausente produce 401; un token válido de docente o estudiante produce 403.</paragraph>
+ <object index="50" name="Table1" object_type="table"/>
+ <paragraph index="52" node_type="writer" parent_index="50">Petición</paragraph>
+ <paragraph index="55" node_type="writer" parent_index="50">Identidad</paragraph>
+ <paragraph index="58" node_type="writer" parent_index="50">Resultado</paragraph>
+ <paragraph index="61" node_type="writer" parent_index="50">DELETE /courses/9</paragraph>
+ <paragraph index="64" node_type="writer" parent_index="50">Docente propietario</paragraph>
+ <paragraph index="67" node_type="writer" parent_index="50">403 Forbidden</paragraph>
+ <paragraph index="70" node_type="writer" parent_index="50">DELETE /courses/9</paragraph>
+ <paragraph index="73" node_type="writer" parent_index="50">Administrador</paragraph>
+ <paragraph index="76" node_type="writer" parent_index="50">204 No Content</paragraph>
+ <paragraph index="79" node_type="writer" parent_index="50">PATCH /courses/9</paragraph>
+ <paragraph index="82" node_type="writer" parent_index="50">Estudiante</paragraph>
+ <paragraph index="85" node_type="writer" parent_index="50">403 Forbidden</paragraph>
+ <paragraph index="88" node_type="writer">La ruta de administración no depende del cliente: la decisión se toma en los guards del servidor antes de llegar al servicio.</paragraph>
+ <paragraph index="89" node_type="writer">5. Propiedad de recursos</paragraph>
+ <paragraph index="90" node_type="writer">@Column({ type: 'int', nullable: true })
+createdByUserId: number | null;
+
+private assertCanManage(course: Course, actor: AuthenticatedUser): void {
+  if (actor.role === UserRole.ADMIN) return;
+  if (actor.role === UserRole.TEACHER &amp;&amp;
+      course.createdByUserId === actor.id) return;
+  throw new ForbiddenException('You cannot modify this course');
+}</paragraph>
+ <paragraph index="91" node_type="writer">El propietario se toma del usuario autenticado al crear el curso y nunca del cuerpo HTTP. En la demostración, POST /courses con token de docente devolvió:</paragraph>
+ <paragraph index="92" node_type="writer">{&quot;id&quot;:9,&quot;title&quot;:&quot;Curso propiedad docente&quot;,&quot;level&quot;:&quot;beginner&quot;,&quot;createdByUserId&quot;:16}</paragraph>
+ <paragraph index="93" node_type="writer">Un cuerpo con createdByUserId ajeno es rechazado con 400 por forbidNonWhitelisted, porque ese campo no pertenece al DTO.</paragraph>
+ <paragraph index="94" node_type="writer">Matriz de los cinco casos sobre PATCH /courses/9:</paragraph>
+ <object index="95" name="Table2" object_type="table"/>
+ <paragraph index="97" node_type="writer" parent_index="95">Identidad</paragraph>
+ <paragraph index="100" node_type="writer" parent_index="95">Código</paragraph>
+ <paragraph index="103" node_type="writer" parent_index="95">Motivo</paragraph>
+ <paragraph index="106" node_type="writer" parent_index="95">Sin token</paragraph>
+ <paragraph index="109" node_type="writer" parent_index="95">401</paragraph>
+ <paragraph index="112" node_type="writer" parent_index="95">No hay identidad válida.</paragraph>
+ <paragraph index="115" node_type="writer" parent_index="95">Estudiante</paragraph>
+ <paragraph index="118" node_type="writer" parent_index="95">403</paragraph>
+ <paragraph index="121" node_type="writer" parent_index="95">Su rol no está en @Roles(admin, teacher).</paragraph>
+ <paragraph index="124" node_type="writer" parent_index="95">Docente ajeno</paragraph>
+ <paragraph index="127" node_type="writer" parent_index="95">403</paragraph>
+ <paragraph index="130" node_type="writer" parent_index="95">El curso pertenece a otro usuario.</paragraph>
+ <paragraph index="133" node_type="writer" parent_index="95">Docente propietario</paragraph>
+ <paragraph index="136" node_type="writer" parent_index="95">200</paragraph>
+ <paragraph index="139" node_type="writer" parent_index="95">Rol válido y createdByUserId coincide.</paragraph>
+ <paragraph index="142" node_type="writer" parent_index="95">Administrador</paragraph>
+ <paragraph index="145" node_type="writer" parent_index="95">200</paragraph>
+ <paragraph index="148" node_type="writer" parent_index="95">El rol admin gestiona cualquier curso.</paragraph>
+ <paragraph index="152" node_type="writer">Imagen 2. Creación del curso, matriz de PATCH y resultado de DELETE.</paragraph>
+ <paragraph index="153" node_type="writer">6. CORS restringido</paragraph>
+ <paragraph index="154" node_type="writer">export function corsOptions(config: ConfigService): CorsOptions {
+  const origin = config.getOrThrow&lt;string&gt;('CORS_ORIGINS')
+    .split(',').map((entry) =&gt; entry.trim()).filter(Boolean);
+  return {
+    origin,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  };
+}</paragraph>
+ <paragraph index="155" node_type="writer">La variable CORS_ORIGINS se documenta en .env.example y en el README. El valor por defecto para desarrollo es http://localhost:5173; en producción se declaran explícitamente los orígenes del cliente real.</paragraph>
+ <paragraph index="156" node_type="writer">Origin: http://localhost:5173
+  -&gt; Access-Control-Allow-Origin: http://localhost:5173
+
+Origin: https://origen-no-autorizado.example
+  -&gt; sin cabecera Access-Control-Allow-Origin</paragraph>
+ <paragraph index="158" node_type="writer">Imagen 3. Cabeceras CORS para un origen permitido y uno rechazado.</paragraph>
+ <paragraph index="159" node_type="writer">CORS solo afecta a navegadores: no sustituye a JWT ni a los guards. Las rutas protegidas siguen exigiendo token aunque el origen esté permitido.</paragraph>
+ <paragraph index="160" node_type="writer">7. Limitación de solicitudes en login</paragraph>
+ <paragraph index="161" node_type="writer">@Post('login')
+@HttpCode(HttpStatus.OK)
+@Throttle({ default: { limit: 5, ttl: 60_000 } })
+login(@Body() dto: LoginDto) { return this.authService.login(dto); }</paragraph>
+ <paragraph index="162" node_type="writer">El límite global es de 100 solicitudes por minuto y el de login es más estricto: cinco intentos por minuto. Se ejecutaron seis intentos controlados con contraseña incorrecta:</paragraph>
+ <paragraph index="163" node_type="writer">intento 1 -&gt; 401 Unauthorized
+intento 2 -&gt; 401 Unauthorized
+intento 3 -&gt; 401 Unauthorized
+intento 4 -&gt; 401 Unauthorized
+intento 5 -&gt; 401 Unauthorized
+intento 6 -&gt; 429 Too Many Requests</paragraph>
+ <paragraph index="165" node_type="writer">Imagen 4. Seis intentos fallidos de login: cinco 401 y un 429.</paragraph>
+ <paragraph index="166" node_type="writer">La respuesta 429 no revela si el correo o la contraseña eran correctos.</paragraph>
+ <paragraph index="167" node_type="writer">8. HTTPS/TLS y secretos</paragraph>
+ <paragraph index="168" node_type="writer">El README declara: «Producción: la API debe servirse detrás de HTTPS/TLS (terminación en un proxy, balanceador o plataforma de despliegue). Los secretos —JWT_SECRET y las credenciales de base de datos— viven solo en el entorno del servidor; nunca en el repositorio, el token ni los logs».</paragraph>
+ <paragraph index="169" node_type="writer">JWT_SECRET se valida al arrancar con un mínimo de 32 caracteres. .env está en .gitignore; .env.example solo documenta los nombres de las variables con valores de ejemplo.</paragraph>
+ <paragraph index="170" node_type="writer">9. Pruebas automatizadas</paragraph>
+ <paragraph index="171" node_type="writer">npm run build   -&gt; sin errores
+npm run lint    -&gt; sin errores
+npm test        -&gt; 1 suite, 1 prueba, 0 fallidas
+npm run test:e2e -&gt; 4 suites, 57 pruebas, 0 fallidas</paragraph>
+ <paragraph index="173" node_type="writer">Imagen 5. Salida real de npm run test:e2e.</paragraph>
+ <paragraph index="174" node_type="writer">test/authorization.e2e-spec.ts cubre /auth/me con token válido, ausente y alterado; el rol por defecto; la matriz de cinco casos; DELETE exclusivo de admin; que el propietario no se toma del cuerpo; el sexto intento de login con 429; y que solo el origen CORS documentado recibe la cabecera.</paragraph>
+ <paragraph index="175" node_type="writer">10. Conclusiones</paragraph>
+ <paragraph index="176" node_type="writer">Un token válido prueba la identidad, no el permiso: borrar un curso exige además el rol admin.</paragraph>
+ <paragraph index="177" node_type="writer">401 significa que no hay identidad válida; 403 que la identidad existe pero no tiene permiso.</paragraph>
+ <paragraph index="178" node_type="writer">La propiedad se comprueba cerca de la regla de negocio, nunca con un ownerId enviado por el cliente.</paragraph>
+ <paragraph index="179" node_type="writer">CORS reduce el abuso desde navegadores, pero no protege frente a Postman ni reemplaza a JWT.</paragraph>
+ <paragraph index="180" node_type="writer">La limitación de login encarece la fuerza bruta y responde sin filtrar credenciales.</paragraph>
+ <paragraph index="181" node_type="writer">HTTPS/TLS es obligatorio en producción para que el token Bearer no pueda interceptarse en tránsito.</paragraph>
+</indexing>

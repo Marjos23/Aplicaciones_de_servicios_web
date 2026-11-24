@@ -80,9 +80,10 @@ export class StudentService {
     } catch (error) {
       // Igual que en cursos: la tabla bloquea el borrado si el estudiante
       // tiene matrículas, y eso se explica con un 409 y no con un 500.
+      // RESTRICT reporta 23001; 23503 cubre la violación de clave foránea.
       if (error instanceof QueryFailedError) {
         const code = (error.driverError as { code?: string })?.code;
-        if (code === '23503') {
+        if (code === '23001' || code === '23503') {
           throw new ConflictException(
             `Student with id ${id} cannot be deleted because it has enrollments`,
           );

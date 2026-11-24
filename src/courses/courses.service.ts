@@ -4,10 +4,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { QueryFailedError, Repository } from 'typeorm';
 import { Course } from './entities/course.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
-import { UpdateCourseDto } from './dto/update-course.dto';
 import { CoursesQueryDto } from './dto/courses-query.dto';
 
 /** Forma estable de toda lista paginada: elementos y metadatos. */
@@ -26,13 +26,7 @@ export class CoursesService {
   async findAll(
     query: Partial<CoursesQueryDto> = {},
   ): Promise<Paginated<Course>> {
-    const {
-      level,
-      page = 1,
-      limit = 10,
-      sortBy = 'id',
-      order = 'ASC',
-    } = query;
+    const { level, page = 1, limit = 10, sortBy = 'id', order = 'ASC' } = query;
 
     // findAndCount entrega la página pedida y el total que cumple el
     // filtro en una sola consulta. skip = (page - 1) * limit omite las
@@ -59,17 +53,16 @@ export class CoursesService {
     return course;
   }
 
-  create(createCourseDto: CreateCourseDto): Promise<Course> {
+  create(
+    createCourseDto: CreateCourseDto,
+    actor: AuthenticatedUser,
+  ): Promise<Course> {
     return this.coursesRepository.save(
-      this.coursesRepository.create(createCourseDto),
+      this.coursesRepository.create({
+        ...createCourseDto,
+        createdByUserId: actor.id,
+      }),
     );
-  }
-
-  async update(id: number, input: UpdateCourseDto): Promise<Course> {
-    const course = await this.findOne(id);
-    // Se asignan solo campos conocidos: el id nunca se toma del cuerpo.
-    Object.assign(course, input);
-    return this.coursesRepository.save(course);
   }
 
   async remove(id: number): Promise<Course> {
@@ -79,9 +72,10 @@ export class CoursesService {
     } catch (error) {
       // La tabla bloquea el borrado si el curso tiene matrículas. Se traduce
       // a un 409 explicable en lugar de dejar que PostgreSQL produzca un 500.
+      // RESTRICT reporta 23001; 23503 cubre la violación de clave foránea.
       if (error instanceof QueryFailedError) {
         const code = (error.driverError as { code?: string })?.code;
-        if (code === '23503') {
+        if (code === '23001' || code === '23503') {
           throw new ConflictException(
             `Course with id ${id} cannot be deleted because it has enrollments`,
           );

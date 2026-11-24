@@ -5,6 +5,7 @@ import request from 'supertest';
 import { INestApplication } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
+import { createTestAdmin } from './auth-helper';
 import {
   closeTestDataSource,
   createTestDataSource,
@@ -21,6 +22,12 @@ import {
 describe('CourseHub API (e2e HTTP)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
+  let adminToken: string;
+
+  const http = () =>
+    request
+      .agent(app.getHttpServer())
+      .set('Authorization', `Bearer ${adminToken}`);
 
   let courseId: number;
   let studentId: number;
@@ -44,6 +51,7 @@ describe('CourseHub API (e2e HTTP)', () => {
       }),
     );
     await app.init();
+    adminToken = await createTestAdmin(app, dataSource);
   });
 
   afterAll(async () => {
@@ -54,21 +62,21 @@ describe('CourseHub API (e2e HTTP)', () => {
   });
 
   it('GET / responde con el mensaje de la API', () => {
-    return request(app.getHttpServer())
+    return http()
       .get('/')
       .expect(200)
       .expect('coursehub-api está en linea');
   });
 
   it('GET /welcome responde con el mensaje de bienvenida', () => {
-    return request(app.getHttpServer())
+    return http()
       .get('/welcome')
       .expect(200)
       .expect({ message: 'Bienvenido a CourseHub API' });
   });
 
   it('crea un curso y lo persiste', async () => {
-    const res = await request(app.getHttpServer())
+    const res = await http()
       .post('/courses')
       .send({ title: 'Curso e2e', level: 'beginner' })
       .expect(201);
@@ -76,31 +84,31 @@ describe('CourseHub API (e2e HTTP)', () => {
     expect(res.body.id).toBeGreaterThan(0);
     courseId = res.body.id;
 
-    await request(app.getHttpServer()).get(`/courses/${courseId}`).expect(200);
+    await http().get(`/courses/${courseId}`).expect(200);
   });
 
   it('rechaza un curso con level inválido con 400', () => {
-    return request(app.getHttpServer())
+    return http()
       .post('/courses')
       .send({ title: 'Malo', level: 'avanzado' })
       .expect(400);
   });
 
   it('devuelve 404 al pedir un curso inexistente', () => {
-    return request(app.getHttpServer()).get('/courses/999999').expect(404);
+    return http().get('/courses/999999').expect(404);
   });
 
   it('devuelve 400 cuando el id de la ruta no es un entero positivo', () => {
-    return request(app.getHttpServer()).get('/courses/abc').expect(400);
+    return http().get('/courses/abc').expect(400);
   });
 
   it('no deja modificar el id del curso desde el cuerpo', async () => {
-    await request(app.getHttpServer())
+    await http()
       .patch(`/courses/${courseId}`)
       .send({ title: 'Renombrado' })
       .expect(200);
 
-    const res = await request(app.getHttpServer())
+    const res = await http()
       .get(`/courses/${courseId}`)
       .expect(200);
 
@@ -109,14 +117,14 @@ describe('CourseHub API (e2e HTTP)', () => {
   });
 
   it('rechaza una propiedad desconocida en el cuerpo con 400', () => {
-    return request(app.getHttpServer())
+    return http()
       .post('/courses')
       .send({ title: 'Con extra', level: 'beginner', id: 42 })
       .expect(400);
   });
 
   it('crea un estudiante activo por defecto', async () => {
-    const res = await request(app.getHttpServer())
+    const res = await http()
       .post('/students')
       .send({
         name: 'Luis Paz',
@@ -132,7 +140,7 @@ describe('CourseHub API (e2e HTTP)', () => {
   });
 
   it('devuelve 409 al repetir el correo de un estudiante', () => {
-    return request(app.getHttpServer())
+    return http()
       .post('/students')
       .send({
         name: 'Otro',
@@ -145,7 +153,7 @@ describe('CourseHub API (e2e HTTP)', () => {
   });
 
   it('filtra estudiantes por carrera y por estado', async () => {
-    const res = await request(app.getHttpServer())
+    const res = await http()
       .get('/students')
       .query({ career: 'Physics' })
       .expect(200);
@@ -153,21 +161,21 @@ describe('CourseHub API (e2e HTTP)', () => {
     expect(res.body).toHaveLength(1);
     expect(res.body[0].career).toBe('Physics');
 
-    await request(app.getHttpServer())
+    await http()
       .get('/students')
       .query({ isActive: 'true' })
       .expect(200);
   });
 
   it('devuelve 400 si el filtro isActive no es booleano', () => {
-    return request(app.getHttpServer())
+    return http()
       .get('/students')
       .query({ isActive: 'quizá' })
       .expect(400);
   });
 
   it('crea una matrícula y la consulta con sus relaciones', async () => {
-    const res = await request(app.getHttpServer())
+    const res = await http()
       .post('/enrollments')
       .send({ studentId, courseId })
       .expect(201);
@@ -175,7 +183,7 @@ describe('CourseHub API (e2e HTTP)', () => {
     expect(res.body.student.id).toBe(studentId);
     expect(res.body.course.id).toBe(courseId);
 
-    const list = await request(app.getHttpServer())
+    const list = await http()
       .get('/enrollments')
       .query({ studentId })
       .expect(200);
@@ -185,69 +193,69 @@ describe('CourseHub API (e2e HTTP)', () => {
   });
 
   it('devuelve 409 al repetir la misma matrícula', () => {
-    return request(app.getHttpServer())
+    return http()
       .post('/enrollments')
       .send({ studentId, courseId })
       .expect(409);
   });
 
   it('devuelve 404 al matricular contra un estudiante inexistente', () => {
-    return request(app.getHttpServer())
+    return http()
       .post('/enrollments')
       .send({ studentId: 999999, courseId })
       .expect(404);
   });
 
   it('devuelve 400 al matricular un estudiante inactivo', async () => {
-    await request(app.getHttpServer())
+    await http()
       .patch(`/students/${studentId}/status`)
       .send({ isActive: false })
       .expect(200);
 
-    const otro = await request(app.getHttpServer())
+    const otro = await http()
       .post('/courses')
       .send({ title: 'Curso para inactivo', level: 'beginner' })
       .expect(201);
 
-    await request(app.getHttpServer())
+    await http()
       .post('/enrollments')
       .send({ studentId, courseId: otro.body.id })
       .expect(400);
 
-    await request(app.getHttpServer())
+    await http()
       .patch(`/students/${studentId}/status`)
       .send({ isActive: true })
       .expect(200);
   });
 
   it('lista las matrículas por estudiante y por curso', async () => {
-    const byStudent = await request(app.getHttpServer())
+    const byStudent = await http()
       .get(`/students/${studentId}/enrollments`)
       .expect(200);
     expect(byStudent.body).toHaveLength(1);
 
-    const byCourse = await request(app.getHttpServer())
+    const byCourse = await http()
       .get(`/courses/${courseId}/enrollments`)
       .expect(200);
     expect(byCourse.body).toHaveLength(1);
   });
   it('devuelve 404 al pedir las matrículas de un curso inexistente', () => {
-    return request(app.getHttpServer())
+    return http()
       .get('/courses/999999/enrollments')
       .expect(404);
   });
 
   it('cancela la matrícula con 204 y luego devuelve 404', async () => {
-    const list = await request(app.getHttpServer())
+    const list = await http()
       .get(`/enrollments?studentId=${studentId}`)
       .expect(200);
     const id = list.body.items[0].id;
 
-    await request(app.getHttpServer()).delete(`/enrollments/${id}`).expect(204);
+    await http().delete(`/enrollments/${id}`).expect(204);
 
-    await request(app.getHttpServer()).delete(`/enrollments/${id}`).expect(404);
+    await http().delete(`/enrollments/${id}`).expect(404);
 
-    const after = await request(app.getHttpServer())
+    const after = await http()
       .get(`/enrollments?studentId=${studentId}`)
       .expect(200);
     expect(after.body.items).toHaveLength(0);
@@ -255,11 +263,11 @@ describe('CourseHub API (e2e HTTP)', () => {
   });
 
   it('devuelve 409 al borrar un recurso que tiene matrículas', async () => {
-    const curso = await request(app.getHttpServer())
+    const curso = await http()
       .post('/courses')
       .send({ title: 'Curso ocupado', level: 'beginner' })
       .expect(201);
-    const alumno = await request(app.getHttpServer())
+    const alumno = await http()
       .post('/students')
       .send({
         name: 'Ocupado',
@@ -270,33 +278,33 @@ describe('CourseHub API (e2e HTTP)', () => {
       })
       .expect(201);
 
-    const matricula = await request(app.getHttpServer())
+    const matricula = await http()
       .post('/enrollments')
       .send({ studentId: alumno.body.id, courseId: curso.body.id })
       .expect(201);
 
     // La tabla bloquea el borrado; la API lo explica con 409 en vez de 500.
-    await request(app.getHttpServer())
+    await http()
       .delete(`/courses/${curso.body.id}`)
       .expect(409);
-    await request(app.getHttpServer())
+    await http()
       .delete(`/students/${alumno.body.id}`)
       .expect(409);
 
     // Al cancelar la matrícula, ambos recursos ya se pueden borrar.
-    await request(app.getHttpServer())
+    await http()
       .delete(`/enrollments/${matricula.body.id}`)
       .expect(204);
-    await request(app.getHttpServer())
+    await http()
       .delete(`/courses/${curso.body.id}`)
       .expect(204);
-    await request(app.getHttpServer())
+    await http()
       .delete(`/students/${alumno.body.id}`)
       .expect(204);
   });
 
   it('devuelve 409 al borrar un estudiante inactivo', async () => {
-    const res = await request(app.getHttpServer())
+    const res = await http()
       .post('/students')
       .send({
         name: 'Inactivo',
@@ -308,7 +316,7 @@ describe('CourseHub API (e2e HTTP)', () => {
       })
       .expect(201);
 
-    await request(app.getHttpServer())
+    await http()
       .delete(`/students/${res.body.id}`)
       .expect(409);
   });
