@@ -9,16 +9,17 @@ const ENTITIES = [Course, Student, Enrollment, User];
 /**
  * Conexión propia para las pruebas, separada de la de la aplicación.
  *
- * Usa la misma base de datos que `.env` pero con un prefijo de tablas propio,
- * de modo que ejecutar las pruebas no mezcle sus filas con las de desarrollo.
- * Cada suite pide un prefijo distinto porque Jest las ejecuta en paralelo.
+ * Usa la base exclusiva declarada en `.env.test` con un prefijo de tablas
+ * propio, de modo que ejecutar las pruebas no mezcle sus filas con las de
+ * desarrollo. Cada suite pide un prefijo distinto porque Jest las ejecuta en
+ * paralelo.
  *
  * IMPORTANTE: no se usa `dropSchema`. En PostgreSQL el esquema es único para
  * toda la base de datos, así que esa opción borraría también las tablas reales
  * de la aplicación. Solo se eliminan las tablas prefijadas de la suite.
  */
 export async function createTestDataSource(
-  options: { prefix?: string } = {},
+  options: { prefix?: string; reset?: boolean } = {},
 ): Promise<DataSource> {
   const prefix = options.prefix ?? 'e2e_';
 
@@ -35,6 +36,10 @@ export async function createTestDataSource(
   });
 
   await dataSource.initialize();
+  if (options.reset) {
+    await dropTestTables(dataSource, prefix);
+    await dataSource.synchronize();
+  }
   return dataSource;
 }
 

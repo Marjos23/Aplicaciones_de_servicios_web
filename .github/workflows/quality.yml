@@ -1,0 +1,55 @@
+name: quality
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: coursehub-api-test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d coursehub-api-test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      NODE_ENV: test
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_NAME: coursehub-api-test
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_LOGGING: false
+      JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
+      JWT_EXPIRES_IN: 15m
+      CORS_ORIGINS: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependencias desde package-lock.json
+        run: npm ci
+      - name: Verificar tipos
+        run: npm run typecheck
+      - name: Analizar código
+        run: npm run lint
+      - name: Pruebas unitarias
+        run: npm test -- --runInBand
+      - name: Pruebas de integración y e2e
+        run: npm run test:e2e -- --runInBand
+      - name: Compilar proyecto
+        run: npm run build

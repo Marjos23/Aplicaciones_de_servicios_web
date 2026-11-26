@@ -333,20 +333,42 @@ de error. En el código: HTTP en `src/courses/courses.controller.ts`, la regla e
 
 ## Pruebas
 
+Una vez levantada la base de desarrollo, prepara la base exclusiva de pruebas:
+
 ```bash
-npm test          # pruebas unitarias
-npm run test:e2e  # pruebas de extremo a extremo contra PostgreSQL
-npm run test:cov  # cobertura
+cp .env.test.example .env.test
+docker compose -f docker-compose.test.yml up -d --wait
+```
+
+El contenedor `coursehub_test_db` publica PostgreSQL 17 en el puerto **5435**
+con la base `coursehub-api-test`. Sus datos viven en `tmpfs`: desaparecen al
+detener el contenedor. `test/load-env.ts` carga `.env.test` antes que `.env`,
+así que las credenciales de desarrollo nunca se usan en e2e; si no hay
+`NODE_ENV=test`, la suite falla antes de conectar. Para destruir la base:
+
+```bash
+docker compose -f docker-compose.test.yml down -v
+```
+
+Comandos de verificación:
+
+```bash
+npm test                 # pruebas unitarias, sin base de datos
+npm run typecheck        # TypeScript sin emitir archivos
+npm run lint             # análisis estático con oxlint
+npm run test:e2e         # pruebas de extremo a extremo contra PostgreSQL
+npm run test:cov         # cobertura de las pruebas unitarias
+npm run build            # compilación de la aplicación
 ```
 
 Las pruebas e2e **no usan repositorios simulados**: hablan con la aplicación
 completa por HTTP y con PostgreSQL de verdad, para comprobar que las claves
 foráneas y los índices únicos funcionan realmente.
 
-Para no mezclarse con los datos de desarrollo, cada suite usa tablas con
-prefijo propio (`demo_`, `http_`, `query_`) y las elimina al terminar. Las
-pruebas de `.env` usan la misma base de datos: si `DATABASE_NAME` no es válida,
-fallarán antes de empezar.
+Cada suite usa tablas con prefijo propio (`demo_`, `http_`, `query_`,
+`semana13_`) y las elimina al terminar. La suite de la Semana 13, además, borra
+y vuelve a sincronizar sus tablas antes de empezar: una ejecución fallida no
+deja datos que alteren la siguiente.
 
 ### Los siete casos de la demostración
 
@@ -392,6 +414,74 @@ comprueba por HTTP los cuatro casos de la demostración, la forma uniforme de lo
 errores, la ausencia de trazas o secretos en la respuesta y que los registros no
 contienen credenciales ni cuerpos.
 
+### Proyecto integrador: pruebas unitarias (Semana 12)
+
+`npm test` ejecuta 4 suites y 16 pruebas sin PostgreSQL ni peticiones de red:
+
+- `test/update-course.use-case.spec.ts`: inyecta `COURSE_REPOSITORY` simulado con
+  `Test.createTestingModule`; cubre éxito, administrador, inexistente, otro
+  docente y estudiante, y comprueba que no se guarda cuando falla la regla.
+- `test/courses.controller.spec.ts`: usa mocks de los tres colaboradores con
+  guards sobreescritos; verifica que `PATCH` delega id, DTO e identidad, que el
+  error del caso de uso se propaga y que `GET /courses/:id/enrollments` recibe el
+  id transformado.
+- `test/enrollments.service.spec.ts`: simula los tres repositorios de TypeORM
+  para validar estudiante activo, estudiante/curso inexistentes, inactivo,
+  pareja repetida y la traducción del `23505` a `409`.
+
+Para demostrar que la expectativa detecta cambios reales, alterar temporalmente
+la condición de propiedad en `src/courses/use-cases/update-course.use-case.ts` y
+ejecutar:
+
+```bash
+npm test -- --runInBand -t 'niega el curso'
+```
+
+Las dos pruebas de autorización fallan porque la promesa se resuelve en lugar
+de rechazar; al restaurar la condición vuelven a pasar.
+
+### Proyecto integrador: integración y automatización (Semana 13)
+
+`test/semana-13.e2e-spec.ts` usa `test/e2e-fixture.ts` para crear la aplicación
+sobre la base de prueba con el prefijo `semana13_` y cerrarla al terminar.
+Comprueba tres situaciones observables por HTTP:
+
+- `GET /courses` responde `200` y devuelve el curso sembrado solo para la suite.
+- `POST /courses` con token de administrador responde `201` y el curso queda en
+  la tabla prefijada.
+- `POST /courses` sin token responde `401` y con un estudiante autenticado,
+  `403`.
+
+Para comprobar que no dependen de un orden ni de ejecuciones anteriores, corre
+la suite dos veces seguidas:
+
+```bash
+npm run test:e2e -- --runInBand -t 'Semana 13'
+npm run test:e2e -- --runInBand -t 'Semana 13'
+```
+
+La verificación completa, igual que la que hace CI en un entorno limpio, es:
+
+```bash
+npm run typecheck && npm run lint && npm test -- --runInBand && npm run test:e2e -- --runInBand && npm run build
+```
+
+`.github/workflows/quality.yml` se ejecuta en `push` y `pull_request`: instala
+con `npm ci` desde `package-lock.json`, verifica tipos, analiza el código,
+ejecuta las pruebas unitarias y e2e contra un servicio PostgreSQL efímero, y
+compila. Cada paso tiene nombre propio, así que el informe señala qué control
+falló sin leer toda la salida. La revisión de dependencias en PR se activa en
+la configuración de seguridad del repositorio; hasta entonces no se presenta
+como un control existente.
+
+Para ver que una expectativa detecta cambios reales, cambia en la última prueba
+de `test/semana-13.e2e-spec.ts` el `.expect(403)` por `.expect(200)`, ejecuta
+esa suite y restaura el archivo:
+
+```bash
+npm run test:e2e -- --runInBand -t 'Semana 13'
+```
+
 ## Estructura
 
 ```
@@ -412,6 +502,12 @@ src/
 │   └── entidad, DTOs, servicio y controlador
 ├── students/                  Entidad, DTOs, servicio y controlador
 └── enrollments/               Entidad, DTOs, reglas de negocio
+
+test/
+├── semana-13.e2e-spec.ts      Ruta pública, protegida y rechazo
+├── e2e-fixture.ts             Preparación y limpieza de la aplicación
+├── load-env.ts                Configuración exclusiva de prueba
+└── test-data-source.ts        Conexión y prefijo de tablas por suite
 ```
 
 Los controladores se limitan a rutas, parámetros y DTOs. Las reglas viven en
